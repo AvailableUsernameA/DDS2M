@@ -19,6 +19,7 @@ import random
 import pickle
 torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark = True
+from torch.utils.data import DataLoader, TensorDataset, Dataset
 
 def get_beta_schedule(beta_schedule, *, beta_start, beta_end, num_diffusion_timesteps):
     """
@@ -73,7 +74,7 @@ class Diffusion(object):
         Args:
             args (Namespace): Command line arguments
             config (Namespace): Configuration parameters
-            device (torch.device): Device to run the model on
+            device (torch.device): Device to run the model 
         """
         self.args = args
         self.config = config
@@ -118,37 +119,51 @@ class Diffusion(object):
             config (Namespace): Configuration parameters
             image_folder (str): Folder to save the sampled images
         """
-        path = os.path.join(config.data.root, config.data.filename)
-        with open(path, 'rb') as f:
-            x_test, y_test, observed_mask, missing_mask, ground_truth = pickle.load(f, encoding='latin1')
+        #path = os.path.join(config.data.root, config.data.filename)
+        #with open(path, 'rb') as f:
+        #    x_test, y_test, observed_mask, missing_mask, ground_truth = pickle.load(f, encoding='latin1')
         
-        # x_test = (x_test-np.min(x_test))/(np.max(x_test)-np.min(x_test))
-        # y_test = (y_test-np.min(y_test))/(np.max(y_test)-np.min(y_test))
+        #x_test = (x_test-np.min(x_test))/(np.max(x_test)-np.min(x_test))
+        #y_test = (y_test-np.min(y_test))/(np.max(y_test)-np.min(y_test))
         # mask_1 = np.tile(np.expand_dims(observed_mask, -1), (x_test.shape[0], 1, 1, 1, 1))
         # mask_2 = np.tile(np.expand_dims(missing_mask, -1), (x_test.shape[0], 1, 1, 1, 1))
 
-        # dataset = TensorDataset(torch.tensor(x_test, dtype=torch.float32), 
-        #                         torch.tensor(y_test, dtype=torch.float32), 
-        #                         torch.tensor(mask_1, dtype=torch.float32), 
-        #                         torch.tensor(mask_2, dtype=torch.float32))
+        #combine_test = torch.cat((torch.tensor(x_test, dtype=torch.float32),
+        #                          torch.tensor(y_test, dtype=torch.float32)), dim=0)
+        #dataset = TensorDataset(combine_test) 
+                                #torch.tensor(mask_1, dtype=torch.float32), 
+                                #torch.tensor(mask_2, dtype=torch.float32))
 
-        # dataloader = DataLoader(dataset, batch_size=16, shuffle=True)
-        results = []
-        for image in x_test:
-            model = VS2M(
-                self.args.rank, np.ones((self.config.data.image_size, self.config.data.image_size, self.config.data.image_size, self.config.data.channels)),
-                np.ones((self.config.data.image_size, self.config.data.image_size, self.config.data.image_size, self.config.data.channels)), 
-                self.args.beta, self.config.model.iter_number, self.config.model.lr
-            )
-            result = self.sample_sequence(model, image, config, logger, image_folder=image_folder)
-            results.append(result)
+        #dataloader = DataLoader(dataset, batch_size=10, shuffle=True)
+        #results = []
+        #for image in x_test:
+        #    model = VS2M(
+        #        self.args.rank, np.ones((self.config.data.image_size, self.config.data.image_size, self.config.data.image_size, self.config.data.channels)),
+        #        np.ones((self.config.data.image_size, self.config.data.image_size, self.config.data.image_size, self.config.data.channels)), 
+        #        self.args.beta, self.config.model.iter_number, self.config.model.lr
+        #    )
+        #for image in dataloader:
+        #    model = VS2M(
+        #            self.args.rank, np.ones((10, self.config.data.image_size, self.config.data.image_size, self.config.data.image_size, self.config.data.channels)),
+        #            np.ones((10, self.config.data.image_size, self.config.data.image_size, self.config.data.image_size, self.config.data.channels)), 
+        #            self.args.beta, self.config.model.iter_number, self.config.model.lr
+        #        )
+            #result = self.sample_sequence(model, image[0], config, logger, image_folder=image_folder)
+            #results.append(result)
         
-            with open(os.path.join(image_folder, f"x_demo_new.pickle"), 'wb') as f:
-                pickle.dump(results, f)
-                f.close()
+        #with open(os.path.join(image_folder, f"x_demo_new.pickle"), 'wb') as f:
+        #    pickle.dump(results, f)
+        #    f.close()
+        model = VS2M(
+                    self.args.rank, np.ones((self.config.data.image_size, self.config.data.image_size, self.config.data.image_size, self.config.data.channels)),
+                    np.ones((self.config.data.image_size, self.config.data.image_size, self.config.data.image_size, self.config.data.channels)), 
+                    self.args.beta, self.config.model.iter_number, self.config.model.lr
+                )
+        self.sample_sequence(model, config, logger, image_folder=image_folder)
 
 
-    def sample_sequence(self, model, image, config=None, logger=None, image_folder=None):
+
+    def sample_sequence(self, model, config=None, logger=None, image_folder=None):
         """
         Start sampling a single image
 
@@ -160,45 +175,80 @@ class Diffusion(object):
         """
         args, config = self.args, self.config
         deg = args.deg
+        path = os.path.join(config.data.root, config.data.filename)
+        with open(path, 'rb') as f:
+            x_test, y_test, observed_mask, missing_mask, ground_truth = pickle.load(f, encoding='latin1')
         
-        mask = None
+        x_test = (x_test-np.min(x_test))/(np.max(x_test)-np.min(x_test))
+        y_test = (y_test-np.min(y_test))/(np.max(y_test)-np.min(y_test))
+        # mask_1 = np.tile(np.expand_dims(observed_mask, -1), (x_test.shape[0], 1, 1, 1, 1))
+        # mask_2 = np.tile(np.expand_dims(missing_mask, -1), (x_test.shape[0], 1, 1, 1, 1))
 
-        # get degradation matrix
-        args.sigma_0 = float(deg[9:])
-        H_funcs = Denoising(config.data.channels, config.data.image_size, self.device)
-        image = (image-np.min(image))/(np.max(image)-np.min(image))
-        img_clean = torch.from_numpy(np.float32(image)).permute(3, 0, 1, 2).unsqueeze(0)
-        ## to account for scaling to [-1,1]
-        args.sigma_0 = 2 * args.sigma_0 
-        sigma_0 = args.sigma_0
+        combine_test = torch.cat((torch.tensor(x_test, dtype=torch.float32),
+                                  torch.tensor(y_test, dtype=torch.float32)), dim=0)
+        dataset = TensorDataset(combine_test) 
+                                #torch.tensor(mask_1, dtype=torch.float32), 
+                                #torch.tensor(mask_2, dtype=torch.float32))
+
+        dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
+        results = []
+        #for image in x_test:
+        #    model = VS2M(
+        #        self.args.rank, np.ones((self.config.data.image_size, self.config.data.image_size, self.config.data.image_size, self.config.data.channels)),
+        #        np.ones((self.config.data.image_size, self.config.data.image_size, self.config.data.image_size, self.config.data.channels)), 
+        #        self.args.beta, self.config.model.iter_number, self.config.model.lr
+        #    )
+        #iter = 1#
+        for image in dataloader:
+            #result = self.sample_sequence(model, image[0], config, logger, image_folder=image_folder)
+            #results.append(result)
+            image = image[0][0]
+            mask = None
+
+            # get degradation matrix
+            args.sigma_0 = float(deg[9:])
+            H_funcs = Denoising(config.data.channels, config.data.image_size, self.device)
+            #image = (image-np.min(image))/(np.max(image)-np.min(image))
+            #print(torch.from_numpy(np.float32(image)).shape)
+            #img_clean = torch.from_numpy(np.float32(image)).permute(3, 0, 1, 2).unsqueeze(0)
+            img_clean = torch.from_numpy(np.float32(image)).permute(3, 0, 1, 2).unsqueeze(0)
+            ## to account for scaling to [-1,1]
+            args.sigma_0 = 2 * args.sigma_0 
+            sigma_0 = args.sigma_0
         
-        x_orig = img_clean
-        x_orig = x_orig.to(self.device)
+            x_orig = img_clean
+            x_orig = x_orig.to(self.device)
 
-        x_orig = data_transform(self.config, x_orig)          # x = 2x - 1
+            x_orig = data_transform(self.config, x_orig)          # x = 2x - 1
 
-        y_0 = H_funcs.H(x_orig) # (1, 629930) only include the konwn pixel for completion
-        y_0 = y_0 + sigma_0 * torch.randn_like(y_0)  #add noise on the konwn pixel for completion
+            y_0 = H_funcs.H(x_orig) # (1, 629930) only include the konwn pixel for completion
+            y_0 = y_0 + sigma_0 * torch.randn_like(y_0)  #add noise on the konwn pixel for completion
 
-        ## in this operation, the known pixels remain unchanged, and the unknown pixels are filled with 0, which is essentially a rearrangement process for completion
-        pinv_y_0 = H_funcs.H_pinv(y_0).view(y_0.shape[0], config.data.channels, self.config.data.image_size, self.config.data.image_size, self.config.data.image_size) 
-        ## processing the unknown pixel value for completion
-        if deg == 'completion':
-            pinv_y_0 += H_funcs.H_pinv(H_funcs.H(torch.ones_like(pinv_y_0))).reshape(*pinv_y_0.shape) - 1
+            ## in this operation, the known pixels remain unchanged, and the unknown pixels are filled with 0, which is essentially a rearrangement process for completion
+            pinv_y_0 = H_funcs.H_pinv(y_0).view(y_0.shape[0], config.data.channels, self.config.data.image_size, self.config.data.image_size, self.config.data.image_size) 
+            ## processing the unknown pixel value for completion
+            if deg == 'completion':
+                pinv_y_0 += H_funcs.H_pinv(H_funcs.H(torch.ones_like(pinv_y_0))).reshape(*pinv_y_0.shape) - 1
 
-        pinv_y_0 = inverse_data_transform(config, pinv_y_0[0,:,:,:,:]).detach().permute(1,2,3,0).cpu().numpy()
+            pinv_y_0 = inverse_data_transform(config, pinv_y_0[0,:,:,:,:]).detach().permute(1,2,3,0).cpu().numpy()
+            #print(y_0.shape)
+            x = torch.randn(
+                y_0.shape[0],
+                config.data.channels,
+                config.data.image_size,
+                config.data.image_size,
+                config.data.image_size,
+                device=self.device,
+            )
+            result = self.sample_image(pinv_y_0, x, model, H_funcs, y_0, sigma_0, mask=mask, img_clean=img_clean, logger=logger, image_folder=image_folder)
+            results.append(result)
+            #if iter == 1:##
+            #    break
+        with open(os.path.join(image_folder, f"x_demo_new.pickle"), 'wb') as f:
+            pickle.dump(results, f)
+            f.close()
 
-        x = torch.randn(
-            y_0.shape[0],
-            config.data.channels,
-            config.data.image_size,
-            config.data.image_size,
-            config.data.image_size,
-            device=self.device,
-        )
-
-        return self.sample_image(pinv_y_0, x, model, H_funcs, y_0, sigma_0, mask=mask, img_clean=img_clean, logger=logger, image_folder=image_folder)
-
+        return results
 
     def sample_image(self, pinv_y_0, x, model, H_funcs, y_0, sigma_0, mask=None, img_clean=None, logger=None, image_folder=None):
         """

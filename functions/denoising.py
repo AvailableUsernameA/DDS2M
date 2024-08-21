@@ -51,7 +51,8 @@ def efficient_generalized_steps(pinv_y_0, x, seq, model, b, H_funcs, y_0, sigma_
     Sigma[:singulars.shape[0]] = singulars
     U_t_y = H_funcs.Ut(y_0)
     Sig_inv_U_t_y = U_t_y / singulars[:U_t_y.shape[-1]]
-    
+    #print((torch.ones(x.size(0)) * seq[-1]).to(x.device).long())
+    #print(x.shape)
     largest_alphas = compute_alpha(b, (torch.ones(x.size(0)) * seq[-1]).to(x.device).long())
     largest_sigmas = (1 - largest_alphas).sqrt() / largest_alphas.sqrt()
     large_singulars_index = torch.where(singulars * largest_sigmas[0, 0, 0, 0, 0] > sigma_0)
@@ -96,8 +97,11 @@ def efficient_generalized_steps(pinv_y_0, x, seq, model, b, H_funcs, y_0, sigma_
         update = False if iii < args.start_point else True
         # predict denoised image
         if update: 
-            x0_t, step, best_, psnr_best_= model.optimize(xt.squeeze(0).permute(1, 2, 3, 0).detach().cpu().numpy(),
-                            img_clean.squeeze(0).permute(1, 2, 3, 0).detach().cpu().numpy(), at, mask, config.model.iter_number[iii-1], logger, avg, update) 
+            #x0_t, step, best_, psnr_best_= model.optimize(xt.squeeze(0).permute(1, 2, 3, 0).detach().cpu().numpy(),
+            #                img_clean.squeeze(0).permute(1, 2, 3, 0).detach().cpu().numpy(), at, mask, config.model.iter_number[iii-1], logger, avg, update) 
+            x0_t, step, best_, psnr_best_= model.optimize(xt.squeeze(0).permute(1,2,3,0).detach().cpu().numpy(),
+                            img_clean.squeeze(0).permute(1,2,3,0).detach().cpu().numpy(), at, mask, config.model.iter_number[iii-1], logger, avg, update) 
+            #x0_t = torch.from_numpy(x0_t).permute(3, 0, 1, 2).unsqueeze(0).cuda()
             x0_t = torch.from_numpy(x0_t).permute(3, 0, 1, 2).unsqueeze(0).cuda()
             x0_t = x0_t * 2 - 1.0
             if psnr_best_ > psnr_best:
@@ -145,17 +149,24 @@ def efficient_generalized_steps(pinv_y_0, x, seq, model, b, H_funcs, y_0, sigma_
             xt_next = (at_next.sqrt()[0, 0, 0, 0, 0] * xt_mod_next).view(*x.shape)
             
             x0_t = torch.clamp((x0_t + 1.0) / 2.0, 0.0, 1.0)
+            #print((x0_t.squeeze(0)).shape)
+            #print((img_clean.squeeze(0)).shape)
+            #psnr = quality(x0_t.squeeze(0).cpu().permute(1,2,3,0).numpy(), img_clean.squeeze(0).permute(1,2,3,0).numpy())
             psnr = quality(x0_t.squeeze(0).cpu().permute(1,2,3,0).numpy(), img_clean.squeeze(0).permute(1,2,3,0).numpy())
             if psnr_best < psnr:
                 psnr_best = psnr
+                #best = x0_t.squeeze(0).cpu().permute(1,2,3,0).numpy()
                 best = x0_t.squeeze(0).cpu().permute(1,2,3,0).numpy()
             logger.info('iteration: {}, psnr: {}, psnr_best: {}'.format(iii, psnr, psnr_best))
 
     x_ = inverse_data_transform(config, xt_next.to('cpu'))
 
+    #x_save = x_[0,:,:,:,:].permute(1,2,3,0).cpu().numpy()
     x_save = x_[0,:,:,:,:].permute(1,2,3,0).cpu().numpy()
     x_best = best
+    #img_clean_save = img_clean[0,:,:,:,:].permute(1,2,3,0).cpu().numpy()
     img_clean_save = img_clean[0,:,:,:,:].permute(1,2,3,0).cpu().numpy()
+    #psnr = quality(x_save, img_clean[0,:,:,:,:].permute(1,2,3,0).detach().cpu().numpy())
     psnr = quality(x_save, img_clean[0,:,:,:,:].permute(1,2,3,0).detach().cpu().numpy())
 
     scio.savemat(

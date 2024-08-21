@@ -94,6 +94,7 @@ def bn(num_features):
 
 
 def conv(in_f, out_f, kernel_size, stride=1, bias=True, pad='zero', downsample_mode='stride'):
+#def conv(in_f, out_f, kernel_size, stride=1, bias=True, pad='reflection', downsample_mode='stride'):
     downsampler = None
     if stride != 1 and downsample_mode != 'stride':
 

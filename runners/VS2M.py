@@ -30,9 +30,12 @@ class VS2M(object):
         """
         self.beta = beta
         self.rank = rank
+        #self.channel = image_noisy.shape[3]
         self.channel = image_noisy.shape[3]
+        #self.image_size = image_noisy.shape[0]
         self.image_size = image_noisy.shape[0]
         self.now_rank = self.rank
+        #self.image = np.reshape(image_noisy, (-1, image_noisy.shape[3]), order="F")
         self.image = np.reshape(image_noisy, (-1, image_noisy.shape[3]), order="F")
         self.image_clean = image_clean
         self.num_iter = num_iter
@@ -58,6 +61,8 @@ class VS2M(object):
         self._init_all()
         self.out_avg = 0
         self.save_every = 1000
+        #self.o = torch.zeros((self.image_clean.shape[0] * self.image_clean.shape[1] * self.image_clean.shape[2], self.image_clean.shape[3])).type(
+        #    torch.cuda.FloatTensor)
         self.o = torch.zeros((self.image_clean.shape[0] * self.image_clean.shape[1] * self.image_clean.shape[2], self.image_clean.shape[3])).type(
             torch.cuda.FloatTensor)
         self.previous = np.zeros(self.image_clean.shape)
@@ -71,7 +76,32 @@ class VS2M(object):
         image = self.image
         self.image_torch = np_to_torch(image).type(torch.cuda.FloatTensor)
         self.image_torch = self.image_torch.squeeze(0)
+    """
+    def _init_nets(self):
+        #
+        #Initialize neural networks for the optimization process
+        #
+        pad = 'reflection'
+        data_type = torch.cuda.FloatTensor
+        self.image_net = []
+        self.parameters = []
+        for i in range(self.rank):
+            net = skip(self.input_depth, self.output_depth,  num_channels_down = [4, 8, 16, 16],
+                           num_channels_up = [4, 8, 16, 16],
+                           num_channels_skip = [0, 0, 4, 4],
+                           filter_size_down = [5, 5, 3, 3], filter_size_up = [5, 5, 3, 3],
+                           upsample_mode='trilinear', downsample_mode='avg',
+                           need_sigmoid=False, pad=pad, act_fun='LeakyReLU').type(data_type)
+            self.parameters = [p for p in net.parameters()] + self.parameters
+            self.image_net.append(net)
 
+        self.mask_net = []
+        for i in range(self.rank):
+            #net = fcn(self.image_clean.shape[3], self.image_clean.shape[3], num_hidden=[128, 256, 256, 128]).type(data_type)
+            net = fcn(self.image_clean.shape[3], self.image_clean.shape[3], num_hidden=[128, 256, 256, 128]).type(data_type)
+            self.parameters = self.parameters + [p for p in net.parameters()]
+            self.mask_net.append(net)
+    """
     def _init_nets(self):
         """
         Initialize neural networks for the optimization process
@@ -92,6 +122,7 @@ class VS2M(object):
 
         self.mask_net = []
         for i in range(self.rank):
+            #net = fcn(self.image_clean.shape[3], self.image_clean.shape[3], num_hidden=[128, 256, 256, 128]).type(data_type)
             net = fcn(self.image_clean.shape[3], self.image_clean.shape[3], num_hidden=[128, 256, 256, 128]).type(data_type)
             self.parameters = self.parameters + [p for p in net.parameters()]
             self.mask_net.append(net)
@@ -110,6 +141,8 @@ class VS2M(object):
         """
         Initialize inputs to neural net
         """
+        #original_noise = torch_to_np(get_noise1(1, 'noise', (self.input_depth, *self.image_clean.shape[:3]), noise_type='u',
+        #                                                             var=10/10.).type(torch.cuda.FloatTensor).detach())
         original_noise = torch_to_np(get_noise1(1, 'noise', (self.input_depth, *self.image_clean.shape[:3]), noise_type='u',
                                                                      var=10/10.).type(torch.cuda.FloatTensor).detach())
         self.image_net_inputs = np_to_torch(original_noise).type(torch.cuda.FloatTensor).detach()[0, :, :, :, :]
@@ -159,6 +192,7 @@ class VS2M(object):
         """
         self.num_iter = iteration
         # self.mask = torch.from_numpy(mask).cuda()
+        #self.image = np.reshape(image_noisy, (-1, image_noisy.shape[3]), order="F")
         self.image = np.reshape(image_noisy, (-1, image_noisy.shape[3]), order="F")
         self.out_avg = avg
         self.image_clean = image_clean
@@ -192,11 +226,15 @@ class VS2M(object):
         out = self.image_net[0](M)
         for i in range(1, self.now_rank):
             out = torch.cat((out, self.image_net[i](M)), 0)
+        #out = out[:, :, :self.image_clean.shape[0], :self.image_clean.shape[1], :self.image_clean.shape[2]]
         out = out[:, :, :self.image_clean.shape[0], :self.image_clean.shape[1], :self.image_clean.shape[2]]
 
+
         # reshape and combine outputs for all ranks
+        #self.image_out = out[m, :, :, :, :].squeeze(0).reshape((-1, 1))
         self.image_out = out[m, :, :, :, :].squeeze(0).reshape((-1, 1))
         for m in range(1, self.now_rank):
+            #self.image_out = torch.cat((self.image_out, out[m, :, :, :, :].squeeze(0).reshape((-1, 1))), 1)
             self.image_out = torch.cat((self.image_out, out[m, :, :, :, :].squeeze(0).reshape((-1, 1))), 1)
         self.image_out_np = torch_to_np(self.image_out)
 
@@ -227,8 +265,13 @@ class VS2M(object):
         # compute losses
         self.loss1 = self.mse_loss(self.image_com_rescale * at.sqrt(), self.image_torch)
         self.loss2 = self.kl_loss(self.et)
+        #self.loss4 = torch.norm(self.image_com_rescale - self.image_torch, p=1)#####
+        #self.image_com_rescale = torch.reshape(self.image_com_rescale, (self.image_size,self.image_size, self.image_size, self.channel)).permute(3,0,1,2).unsqueeze(0)
         self.image_com_rescale = torch.reshape(self.image_com_rescale, (self.image_size,self.image_size, self.image_size, self.channel)).permute(3,0,1,2).unsqueeze(0)
         self.loss3 = self.tv_loss(self.image_com_rescale)
+        print('loss3: ')
+        print(self.loss3)
+        #self.total_loss = self.loss1 + self.beta * self.loss3 + self.loss4
         self.total_loss = self.loss1 + self.beta * self.loss3
         self.total_loss.backward(retain_graph=True)
         self.res = np.sqrt(np.sum(np.square(self.out_avg - self.previous)) / np.sum(np.square(self.previous)))
