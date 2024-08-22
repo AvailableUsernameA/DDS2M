@@ -269,8 +269,6 @@ class VS2M(object):
         #self.image_com_rescale = torch.reshape(self.image_com_rescale, (self.image_size,self.image_size, self.image_size, self.channel)).permute(3,0,1,2).unsqueeze(0)
         self.image_com_rescale = torch.reshape(self.image_com_rescale, (self.image_size,self.image_size, self.image_size, self.channel)).permute(3,0,1,2).unsqueeze(0)
         self.loss3 = self.tv_loss(self.image_com_rescale)
-        print('loss3: ')
-        print(self.loss3)
         #self.total_loss = self.loss1 + self.beta * self.loss3 + self.loss4
         self.total_loss = self.loss1 + self.beta * self.loss3
         self.total_loss.backward(retain_graph=True)

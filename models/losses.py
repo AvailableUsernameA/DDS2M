@@ -59,16 +59,19 @@ class TVLoss3d(nn.Module):
         s_x = x.size()[1]
         h_x = x.size()[2]
         w_x = x.size()[3]
-        count_s = self._tensor_size(x[:,1:,:,:])
-        count_h = self._tensor_size(x[:,:,1:,:])
-        count_w = self._tensor_size(x[:,:,:,1:])
-        s_tv = torch.pow((x[:,1:,:,:]-x[:,:s_x-1,:,:]),2).sum()
-        h_tv = torch.pow((x[:,:,1:,:]-x[:,:,:h_x-1,:]),2).sum()
-        w_tv = torch.pow((x[:,:,:,1:]-x[:,:,:,:w_x-1]),2).sum()
-        return self.TVLoss_weight*2*(h_tv/count_h+w_tv/count_w+1/2*s_tv/count_s)/batch_size
+        d_x = x.size()[4]##
+        #count_s = self._tensor_size(x[:,1:,:,:,:])
+        count_h = self._tensor_size(x[:,:,1:,:,:])
+        count_w = self._tensor_size(x[:,:,:,1:,:])
+        count_d = self._tensor_size(x[:,:,:,:,1:])
+        h_tv = torch.pow((x[:,:,1:,:,:]-x[:,:,:h_x-1,:,:]),2).sum()
+        w_tv = torch.pow((x[:,:,:,1:,:]-x[:,:,:,:w_x-1,:]),2).sum()
+        d_tv = torch.pow((x[:,:,:,:,1:]-x[:,:,:,:,:d_x-1]),2).sum()##
+        return self.TVLoss_weight*2*(h_tv/count_h+w_tv/count_w+d_tv/count_d)/batch_size##
+        #return self.TVLoss_weight*2*(h_tv/count_h+w_tv/count_w+d_tv/count_d+1/2*s_tv/count_s)/batch_size##
 
     def _tensor_size(self,t):
-        return t.size()[1]*t.size()[2]*t.size()[3]
+        return t.size()[1]*t.size()[2]*t.size()[3]*t.size()[4]
 
 
 class StdLoss(nn.Module):
